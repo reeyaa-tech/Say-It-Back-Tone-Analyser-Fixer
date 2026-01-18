@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Say It Back | Tone Mirror & Fixer</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    body { font-family: sans-serif; margin: 0; background:#f7f7fb; }
+    .dark { background:#121212; color:#eee; }
+    .history { margin-top:2rem; }
+    .history-item { padding:1rem; border-radius:8px; background:#fff; margin:.5rem 0; }
+    .dark .history-item { background:#1f1f1f; }
+    .section-label { font-size:.85rem; text-transform:uppercase; opacity:.7; margin-top:1rem; }
+  </style>
+</head>
+
+<body>
+  <button class="btn-gradient" id="analyzeBtn">
+    <span id="btnText">🔁 Say it back</span>
+    <span class="loader" id="loader"></span>
+  </button>
+
+  <button class="btn-outline" id="darkToggle">🌙</button>
+
+  <header class="header">
+    <div class="logo">🗣️ <span>Say It Back</span></div>
+
+    <div class="emoji-bar">
+      <span title="Friendly">😊</span>
+      <span title="Neutral">😐</span>
+      <span title="Confusing">🤔</span>
+      <span title="Helpful">💡</span>
+      <span title="Rephrase">🔁</span>
+    </div>
+
+    <div class="actions">
+      <button class="btn-outline">Help</button>
+      <button class="btn-primary">Login</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <h2>Say It Back</h2>
+      <p class="subtitle">See how your message sounds to others</p>
+      <textarea placeholder="Type something you want to say…"></textarea>
+      <div class="card-footer">
+        <span class="hint">Shift + Enter to analyze</span>
+        <button class="btn-gradient" id="analyzeBtn2">🔁 Say it back</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Analysis</h2>
+      <div class="badges"></div>
+
+      <div class="section-label">Tone</div>
+      <p id="toneOut">...</p>
+
+      <div class="section-label">Intent</div>
+      <p id="intentOut">...</p>
+
+      <div class="section-label">Impact</div>
+      <p id="impactOut">...</p>
+
+      <div class="section-label">Suggested Rewrite</div>
+      <div class="output-box">
+        <p id="rewriteOut">Your improved message will appear here…</p>
+      </div>
+    </section>
+
+    <section class="card history">
+      <h2>History</h2>
+      <div id="historyList">No messages yet.</div>
+    </section>
+  </main>
+
+  <div class="floating-emoji e1">😊</div>
+  <div class="floating-emoji e2">💬</div>
+  <div class="floating-emoji e3">💡</div>
+  <div class="floating-emoji e4">✨</div>
+  <div class="floating-emoji e5">🤔</div>
+
+  <script>
+    // Dark mode toggle
+    document.getElementById("darkToggle").onclick = () =>
+      document.body.classList.toggle("dark");
+
+    // UI elements
+    const inputBox = document.querySelector("textarea");
+    const toneOut = document.getElementById("toneOut");
+    const intentOut = document.getElementById("intentOut");
+    const impactOut = document.getElementById("impactOut");
+    const rewriteOut = document.getElementById("rewriteOut");
+    const historyList = document.getElementById("historyList");
+
+    const badgeContainer = document.querySelector(".badges");
+    const buttons = [document.getElementById("analyzeBtn"), document.getElementById("analyzeBtn2")];
+    const textEl = document.getElementById("btnText");
+    const loader = document.getElementById("loader");
+
+    // History helpers
+    function loadHistory() {
+      const saved = JSON.parse(localStorage.getItem("history") || "[]");
+      renderHistory(saved);
+    }
+
+    function saveToHistory(entry) {
+      const saved = JSON.parse(localStorage.getItem("history") || "[]");
+      saved.unshift(entry);
+      localStorage.setItem("history", JSON.stringify(saved.slice(0, 20)));
+      renderHistory(saved);
+    }
+
+    function renderHistory(arr) {
+      if (!arr.length) {
+        historyList.textContent = "No messages yet.";
+        return;
+      }
+      historyList.innerHTML = arr
+        .map(item => `
+          <div class="history-item">
+            <div><strong>You:</strong> ${item.input}</div>
+            <div><strong>Rewrite:</strong> ${item.rewrite}</div>
+          </div>
+        `)
+        .join("");
+    }
+
+    // Loader
+    function startLoading() { textEl.style.display="none"; loader.style.display="inline-block"; }
+    function stopLoading() { loader.style.display="none"; textEl.style.display="inline"; }
+
+    async function analyze() {
+      const text = inputBox.value.trim();
+      if (!text) return;
+      startLoading();
+
+      try {
+        const res = await fetch("http://localhost:3001/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: userInput })
+        });
+
+        const json = await res.json();
+
+        // Badges
+        badgeContainer.innerHTML = `
+          <span class="badge">🎭 ${json.tone}</span>
+          <span class="badge">🎯 ${json.intent}</span>
+          <span class="badge warn">⚠️ ${json.impact}</span>
+        `;
+
+        // Individual fields
+        toneOut.textContent = json.tone;
+        intentOut.textContent = json.intent;
+        impactOut.textContent = json.impact;
+        rewriteOut.textContent = json.rewrite;
+
+        saveToHistory({ input:text, rewrite:json.rewrite });
+      } catch {
+        rewriteOut.textContent = "Model could not analyze. Try again!";
+      }
+      stopLoading();
+    }
+
+    buttons.forEach(btn => btn.onclick = analyze);
+    inputBox.addEventListener("keydown", e => {
+      if (e.key === "Enter" && e.shiftKey) analyze();
+    });
+
+    loadHistory();
+  </script>
+</body>
+</html>
